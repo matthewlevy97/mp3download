@@ -385,9 +385,18 @@ var (
 // directory using a small content-derived name.
 func extractFFmpegOnce() (string, error) {
 	ffmpegOnce.Do(func() {
-		// Prefer a sidecar ffmpeg located next to the executable (release ZIP)
+		// Prefer a vendor ffmpeg located in `vendor/` next to the executable (release ZIP)
 		if exe, err := os.Executable(); err == nil {
 			exeDir := filepath.Dir(exe)
+			// 1) vendor/ffmpeg or vendor/ffmpeg.exe
+			for _, name := range []string{"vendor/ffmpeg", "vendor/ffmpeg.exe"} {
+				cand := filepath.Join(exeDir, name)
+				if st, err := os.Stat(cand); err == nil && !st.IsDir() {
+					ffmpegPathCache = cand
+					return
+				}
+			}
+			// 2) legacy sidecar next to exe
 			for _, name := range []string{"ffmpeg", "ffmpeg.exe"} {
 				cand := filepath.Join(exeDir, name)
 				if st, err := os.Stat(cand); err == nil && !st.IsDir() {
@@ -422,6 +431,10 @@ func convertToMP3(inputPath, outputPath, ffmpegPath, title, artist string) error
 	args = append(args, "-id3v2_version", "3", outputPath)
 
 	cmd := exec.Command(ffmpegPath, args...)
+	// Ensure ffmpeg runs with its vendor dir as CWD so it can find companion libs
+	if abs, err := filepath.Abs(ffmpegPath); err == nil {
+		cmd.Dir = filepath.Dir(abs)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

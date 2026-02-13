@@ -49,40 +49,101 @@ download_and_install() {
   mkdir -p "$OUTDIR/$target_dir"
 
   # Extract and find ffmpeg binary
-  mkdir -p "$TMPDIR/extracted"
+  mkdir -p "$TMPDIR/extracted/$target_dir"
   case "$url" in
     *.zip)
-      unzip -q "$out" -d "$TMPDIR/extracted"
+      unzip -q "$out" -d "$TMPDIR/extracted/$target_dir"
       ;;
     *.tar.xz|*.tar.gz|*.tgz)
-      tar -xf "$out" -C "$TMPDIR/extracted"
+      tar -xf "$out" -C "$TMPDIR/extracted/$target_dir"
       ;;
     *)
-      cp "$out" "$TMPDIR/extracted/"
+      cp "$out" "$TMPDIR/extracted/$target_dir/"
       ;;
   esac
 
-  ff=$(find "$TMPDIR/extracted" -type f -iname 'ffmpeg' -o -iname 'ffmpeg.exe' | head -n1 || true)
-  if [ -z "$ff" ]; then
-    # Sometimes binaries are under bin/ffmpeg
-    ff=$(find "$TMPDIR/extracted" -type f -iname '*ffmpeg*' | head -n1 || true)
-  fi
-
+  # Prefer an exact ffmpeg file; use grouped predicates and return first match
+  ff=$(find "$TMPDIR/extracted/$target_dir" -type f \( -iname 'ffmpeg' -o -iname 'ffmpeg.exe' \) -print -quit || true)
   if [ -z "$ff" ]; then
     echo "ffmpeg binary not found inside archive: $url" >&2
     return 2
   fi
 
   echo "Found ffmpeg binary: $ff"
-  # preserve .exe for Windows targets or when the discovered binary has .exe
   ffbase=$(basename "$ff")
+
+  # Validate that the discovered binary matches the requested target platform.
+  # Prevent installing a Windows binary into linux assets (and vice-versa).
+  if [[ "$target_dir" == windows* ]]; then
+    if [[ "$ffbase" != *.exe ]]; then
+      echo "Discovered ffmpeg ($ffbase) is not a Windows .exe but target is $target_dir — skipping install." >&2
+      return 2
+    fi
+  else
+    # non-windows targets should not receive .exe binaries
+    if [[ "$ffbase" == *.exe ]]; then
+      echo "Discovered ffmpeg ($ffbase) appears to be a Windows binary but target is $target_dir — skipping install." >&2
+      return 2
+    fi
+  fi
+  # preserve .exe for Windows targets or when the discovered binary has .exe
+  # destname already inferred above as ffbase extension matches target
   destname="ffmpeg"
-  if [[ "$ffbase" == *.exe ]] || [[ "$target_dir" == windows* ]]; then
+  if [[ "$ffbase" == *.exe ]]; then
     destname="ffmpeg.exe"
   fi
+  mkdir -p "$OUTDIR/$target_dir"
   cp "$ff" "$OUTDIR/$target_dir/$destname"
   chmod +x "$OUTDIR/$target_dir/$destname"
-  echo "Installed to $OUTDIR/$target_dir/$destname"
+
+  # Copy sibling runtime files that are relevant for the target platform only.
+  # Avoid copying Windows DLLs into linux assets and vice-versa.
+  srcdir=$(dirname "$(dirname "$ff")")
+  echo "Copying companion files from $srcdir to $OUTDIR/$target_dir"
+  for s in $srcdir/bin/* $srcdir/lib/*; do
+    [ -f "$s" ] || continue
+    name=$(basename "$s")
+    # skip the ffmpeg we already copied (different name)
+    if [ "$name" = "$ffbase" ]; then
+      continue
+    fi
+
+    copy_it=0
+    # Determine allowed companion extensions per platform
+    if [[ "$target_dir" == windows* ]]; then
+      case "$name" in
+        *.dll|*.exe|ffprobe.exe|ffplay.exe|ffprobe|ffplay)
+          copy_it=1;;
+      esac
+    elif [[ "$target_dir" == linux* ]]; then
+      case "$name" in
+        *.so|ffprobe|ffplay)
+          copy_it=1;;
+      esac
+    elif [[ "$target_dir" == darwin* || "$target_dir" == mac* || "$target_dir" == osx* ]]; then
+      case "$name" in
+        *.dylib|ffprobe|ffplay)
+          copy_it=1;;
+      esac
+    else
+      # default: copy typical helpers and shared libs
+      case "$name" in
+        *.dll|*.so|*.dylib|ffprobe|ffplay|*.exe)
+          copy_it=1;;
+      esac
+    fi
+
+    if [ "$copy_it" -eq 1 ]; then
+      cp "$s" "$OUTDIR/$target_dir/" 2>/dev/null || true
+      chmod +x "$OUTDIR/$target_dir/$name" || true
+      echo "  - copied $name"
+    else
+      # skip unrelated files
+      :
+    fi
+  done
+
+  echo "Installed to $OUTDIR/$target_dir/ (ffmpeg + companions)"
 }
 
 echo "Creating output folders"

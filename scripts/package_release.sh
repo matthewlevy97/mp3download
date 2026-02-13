@@ -33,57 +33,19 @@ for f in "$DIST_DIR"/*; do
   cp "$f" "$stage/"
   if [ -f README.md ]; then cp README.md "$stage/"; fi
   if [ -f LICENSE ]; then cp LICENSE "$stage/"; fi
+  # create vendor subdir for ffmpeg and its runtime companions
+  mkdir -p "$stage/vendor"
 
-  # Attempt to include a platform ffmpeg sidecar. Priority:
-  # 1) dist sibling (e.g. dist/ffmpeg or dist/ffmpeg.exe)
-  # 2) assets/ffmpeg/<dir> where <dir> matches the binary name
-  # 3) any assets/ffmpeg/* candidate (prefer exact exe name for windows)
+  platform_dir=$(echo "$fname" | sed -E 's/^mp3download-//' | sed -E 's/\.exe$//')
 
-  ffname="ffmpeg"
-  if [[ "$fname" == *.exe ]] || [[ "$fname" == *windows* ]] || [[ "$fname" == *win* ]]; then
-    ffname="ffmpeg.exe"
-  fi
+  cp -r "assets/ffmpeg/$platform_dir/" "$stage/vendor/" 2>/dev/null || true
 
-  # check dist sibling
-  if [ -f "$DIST_DIR/$ffname" ]; then
-    echo "Including ffmpeg from $DIST_DIR/$ffname"
-    cp "$DIST_DIR/$ffname" "$stage/$ffname"
-    chmod +x "$stage/$ffname" || true
-  else
-    # search assets for a matching ffmpeg
-    found=""
-    if [ -d "assets/ffmpeg" ]; then
-      for d in assets/ffmpeg/*; do
-        [ -d "$d" ] || continue
-        b=$(basename "$d")
-        # prefer directory name that appears in the binary name
-        if [[ "$fname" == *"$b"* ]]; then
-          cand="$d/$ffname"
-          if [ -f "$cand" ]; then
-            found="$cand"
-            break
-          fi
-        fi
-      done
-      # fallback: pick first available candidate matching ffname
-      if [ -z "$found" ]; then
-        for d in assets/ffmpeg/*; do
-          cand="$d/$ffname"
-          if [ -f "$cand" ]; then
-            found="$cand"
-            break
-          fi
-        done
-      fi
-    fi
-
-    if [ -n "$found" ]; then
-      echo "Including ffmpeg from $found"
-      cp "$found" "$stage/$ffname"
-      chmod +x "$stage/$ffname" || true
-    else
-      echo "No platform ffmpeg found for $fname (not including sidecar)"
-    fi
+  # If vendor does not contain the expected ffmpeg for this release, skip creating this release.
+if [ ! -f "$stage/vendor/ffmpeg" ] && [ ! -f "$stage/vendor/ffmpeg.exe" ]; then
+    echo "Skipping release for $fname: no ffmpeg present" >&2
+    rm -rf "$stage"
+    set -e
+    continue
   fi
 
   # create zip from staged files (strip paths). if zip fails, log and continue.

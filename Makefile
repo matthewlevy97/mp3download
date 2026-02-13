@@ -39,7 +39,7 @@ build-windows-amd64:
 	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags='-s -w' -o $(DIST)/$(BINARY)-windows-amd64.exe ./
 
 clean:
-	@rm -rf $(DIST) release
+	@rm -rf $(DIST) release assets
 
 package: dist
 	@echo "Release zips created in release/"

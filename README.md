@@ -1,19 +1,20 @@
 # MP3Download
 
 Small CLI tool to download audio from a YouTube URL and convert it to an
-iPod-friendly MP3. The built Go executable embeds a platform-specific `ffmpeg`
-binary (from `assets/ffmpeg/<os>-<arch>/`) and extracts it at runtime so the
-delivered binary is self-contained.
+iPod-friendly MP3. The program prefers a sidecar `ffmpeg` next to the
+executable or a system `ffmpeg` on `PATH`. Embedding of ffmpeg into the
+Go binary is intentionally disabled; release zips include a platform
+`ffmpeg` sidecar when available.
 
 Quick usage
 -----------
 
-Fetch ffmpeg assets, build, then run (example macOS):
+Fetch ffmpeg assets (optional), build, then run (example macOS):
 
 ```bash
-make fetch-ffmpeg
+make fetch-ffmpeg    # populates assets/ffmpeg/<platform>/
 make build
-# example (pick the correct binary in dist/ for your platform)
+# run the built binary (pick the correct file from dist/)
 ./dist/mp3download-darwin-amd64 -url "https://www.youtube.com/watch?v=..." -o song.mp3
 ```
 
@@ -23,21 +24,34 @@ If you prefer to run without building first for quick testing:
 go run . -url "https://www.youtube.com/watch?v=..." -o song.mp3
 ```
 
-Notes on `ffmpeg` embedding
----------------------------
+ffmpeg sidecars and packaging
+-----------------------------
 
-Download prebuilt static `ffmpeg` binaries for each platform you want to
-support and place them under `assets/ffmpeg/<os>-<arch>/ffmpeg` (Windows files
-should be named `ffmpeg.exe`). Example paths:
+This project ships release ZIPs that include a platform `ffmpeg` sidecar when
+one is available in `assets/ffmpeg/<platform>/`. The runtime behavior is:
 
-- `assets/ffmpeg/darwin-amd64/ffmpeg`
-- `assets/ffmpeg/darwin-arm64/ffmpeg`
-- `assets/ffmpeg/linux-amd64/ffmpeg`
-- `assets/ffmpeg/windows-amd64/ffmpeg.exe`
+- If an `ffmpeg` (or `ffmpeg.exe` on Windows) is found next to the
+	executable, it is used.
+- Else if a system `ffmpeg` is on `PATH`, the system binary is used.
+- Else the program exits with an instructive error asking you to provide
+	a sidecar or install `ffmpeg` on `PATH`.
 
-The build process embeds whatever is present under `assets/ffmpeg/*/*` into the
-binary. CI or your local build machine must stage the correct `ffmpeg` files
-before `go build` is run.
+The helper `scripts/fetch_ffmpeg.sh` can download prebuilt FFmpeg archives and
+install the platform binary and companion runtime files into
+`assets/ffmpeg/<platform>/`. Important details:
+
+- Windows binaries are installed as `ffmpeg.exe` and the script preserves the
+	`.exe` extension.
+- Companion runtime files (DLLs on Windows, `.so` on Linux, `.dylib` on macOS)
+	are copied from the archive's ffmpeg folder into the same `assets/...`
+	directory so release zips include required libraries.
+- The script filters companion files by target platform to avoid mixing
+	Windows DLLs into Linux folders and vice-versa.
+
+When building locally or in CI, ensure `assets/ffmpeg/<platform>/` contains
+the appropriate files before running `go build` or packaging steps. The
+repository's `Makefile` provides `make fetch-ffmpeg` and `make dist` targets
+to automate fetch+package.
 
 Using a system `ffmpeg`
 -----------------------
@@ -141,10 +155,13 @@ sync
 Troubleshooting
 ---------------
 
-- If `make build` fails, ensure `assets/ffmpeg/<os>-<arch>/ffmpeg` exists for
-	your target; run `make fetch-ffmpeg` or place binaries manually.
-- If MP3s don't appear on the iPod after copying, use iTunes/Finder or
-	`gtkpod`/`rhythmbox` to import and sync — these update the device database.
+- If `make build` or `make dist` fails, run `make fetch-ffmpeg` to populate
+	`assets/ffmpeg/`, or place platform-specific ffmpeg files manually.
+- If release zips don't include a platform `ffmpeg`, verify that
+	`assets/ffmpeg/<platform>/ffmpeg` (or `ffmpeg.exe` on Windows) exists and
+	that companion runtime files (DLLs/.so/.dylib) are present when required.
+- `make clean` removes `dist/`, `release/`, and `assets/` so you can start
+	fresh: `make clean && make fetch-ffmpeg`.
 
 Development notes
 -----------------
