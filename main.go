@@ -189,10 +189,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// If -o is not provided, pass empty string so downloadAndConvert
+	// can derive the filename from the YouTube title.
 	output := *out
-	if output == "" {
-		output = "output.mp3"
-	}
 
 	if err := downloadAndConvert(*url, output); err != nil {
 		log.Fatalf("error: %v", err)
