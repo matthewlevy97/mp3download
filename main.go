@@ -33,6 +33,15 @@ func main() {
 	concurrency := flag.Int("concurrency", runtime.NumCPU(), "Number of concurrent workers for download/convert when using -list")
 	flag.Parse()
 
+	// Support drag-and-drop: if a positional argument (file path) is provided
+	// and -list is not set, treat the first positional arg as the list file.
+	if *list == "" && flag.NArg() > 0 {
+		candidate := flag.Arg(0)
+		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
+			*list = candidate
+		}
+	}
+
 	// Ensure cached ffmpeg is removed on process exit if it was written by us.
 	defer func() {
 		if ffmpegIsTemp && ffmpegPathCache != "" {
