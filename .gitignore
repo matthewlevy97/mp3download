@@ -10,7 +10,6 @@ vendor/
 
 # Binaries and build output
 /dist/
-/release/
 /bin/
 /build/
 *.exe
@@ -19,7 +18,6 @@ vendor/
 *.dylib
 
 # Archives and packages
-*.zip
 *.tar.gz
 
 # Media and temp files

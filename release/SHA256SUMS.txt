@@ -1,0 +1,2 @@
+9c1d57b54707495cadf61e473e2250b253193c4c5e8bf3de79ae3cc9a6de2ac3  mp3download-mp3download-linux-amd64.zip
+73eba548b2b9d9e397d8dbc594a9ed739cd70de68f484875ca276efb4b73b872  mp3download-mp3download-windows-amd64.exe.zip
