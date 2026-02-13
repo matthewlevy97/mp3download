@@ -1,0 +1,53 @@
+# General
+.DS_Store
+Thumbs.db
+*.log
+
+# Go
+*.test
+*.out
+vendor/
+
+# Binaries and build output
+/dist/
+/release/
+/bin/
+/build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Archives and packages
+*.zip
+*.tar.gz
+
+# Media and temp files
+*.mp3
+*.part
+*.tmp
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Assets: ffmpeg binaries should not be committed; use scripts/fetch_ffmpeg.sh
+assets/ffmpeg/*/ffmpeg
+assets/ffmpeg/*/ffmpeg.exe
+# Binaries
+/bin
+
+# Build output
+*.exe
+*.dll
+*.so
+
+# mp3 output
+*.mp3
+
+# temp files
+/tmp
+
+# Go modules
+/vendor
