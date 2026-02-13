@@ -74,9 +74,15 @@ download_and_install() {
   fi
 
   echo "Found ffmpeg binary: $ff"
-  cp "$ff" "$OUTDIR/$target_dir/ffmpeg"
-  chmod +x "$OUTDIR/$target_dir/ffmpeg"
-  echo "Installed to $OUTDIR/$target_dir/ffmpeg"
+  # preserve .exe for Windows targets or when the discovered binary has .exe
+  ffbase=$(basename "$ff")
+  destname="ffmpeg"
+  if [[ "$ffbase" == *.exe ]] || [[ "$target_dir" == windows* ]]; then
+    destname="ffmpeg.exe"
+  fi
+  cp "$ff" "$OUTDIR/$target_dir/$destname"
+  chmod +x "$OUTDIR/$target_dir/$destname"
+  echo "Installed to $OUTDIR/$target_dir/$destname"
 }
 
 echo "Creating output folders"

@@ -2,8 +2,6 @@ package main
 
 import (
 	"bufio"
-	"crypto/sha256"
-	"embed"
 	"flag"
 	"fmt"
 	"io"
@@ -18,8 +16,9 @@ import (
 	"github.com/kkdai/youtube/v2"
 )
 
-//go:embed assets/ffmpeg/*/*
-var ffmpegFS embed.FS
+// Note: ffmpeg is NOT embedded. The program prefers a sidecar `ffmpeg` next
+// to the executable or a system `ffmpeg` on PATH. Do not add ffmpeg to
+// `assets/ffmpeg/` because embedding is disabled by design.
 
 func main() {
 	flag.Usage = func() {
@@ -42,12 +41,7 @@ func main() {
 		}
 	}
 
-	// Ensure cached ffmpeg is removed on process exit if it was written by us.
-	defer func() {
-		if ffmpegIsTemp && ffmpegPathCache != "" {
-			_ = os.Remove(ffmpegPathCache)
-		}
-	}()
+	// No temp-extracted ffmpeg is used anymore; sidecar or system ffmpeg is preferred.
 
 	if *list != "" {
 		// process list file
@@ -98,7 +92,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to extract ffmpeg: %v", err)
 		}
-		defer os.Remove(ff)
+		// ff is either a sidecar or system binary; do not remove it.
 
 		// Concurrent downloads
 		type dlResult struct {
@@ -384,7 +378,6 @@ var (
 	ffmpegOnce      sync.Once
 	ffmpegPathCache string
 	ffmpegErr       error
-	ffmpegIsTemp    bool
 )
 
 // extractFFmpegOnce extracts the embedded ffmpeg once per process and returns
@@ -392,37 +385,27 @@ var (
 // directory using a small content-derived name.
 func extractFFmpegOnce() (string, error) {
 	ffmpegOnce.Do(func() {
-		// Prefer system ffmpeg if available on PATH
+		// Prefer a sidecar ffmpeg located next to the executable (release ZIP)
+		if exe, err := os.Executable(); err == nil {
+			exeDir := filepath.Dir(exe)
+			for _, name := range []string{"ffmpeg", "ffmpeg.exe"} {
+				cand := filepath.Join(exeDir, name)
+				if st, err := os.Stat(cand); err == nil && !st.IsDir() {
+					ffmpegPathCache = cand
+					return
+				}
+			}
+		}
+
+		// Next prefer system ffmpeg on PATH
 		if sysPath, err := exec.LookPath("ffmpeg"); err == nil {
 			ffmpegPathCache = sysPath
-			ffmpegIsTemp = false
-			return
-		}
-		assetPath := filepath.Join("assets", "ffmpeg", runtime.GOOS+"-"+runtime.GOARCH, "ffmpeg")
-		data, err := ffmpegFS.ReadFile(assetPath)
-		if err != nil {
-			ffmpegErr = fmt.Errorf("embedded ffmpeg not found for %s/%s: %w", runtime.GOOS, runtime.GOARCH, err)
 			return
 		}
 
-		h := sha256.Sum256(data)
-		name := fmt.Sprintf("ffmpeg-%x", h[:8])
-		tmpPath := filepath.Join(os.TempDir(), name)
-
-		// if file exists, ensure it's executable and reuse it
-		if _, err := os.Stat(tmpPath); err == nil {
-			_ = os.Chmod(tmpPath, 0755)
-			ffmpegPathCache = tmpPath
-			ffmpegIsTemp = true
-			return
-		}
-
-		if err := os.WriteFile(tmpPath, data, 0755); err != nil {
-			ffmpegErr = fmt.Errorf("failed to write ffmpeg binary: %w", err)
-			return
-		}
-		ffmpegPathCache = tmpPath
-		ffmpegIsTemp = true
+		// No sidecar and no system ffmpeg found — instruct the user.
+		ffmpegErr = fmt.Errorf("ffmpeg not found: place ffmpeg (or ffmpeg.exe on Windows) next to the executable or install ffmpeg on PATH")
+		return
 	})
 	return ffmpegPathCache, ffmpegErr
 }
